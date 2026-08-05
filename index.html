@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Сравнительный анализ проектных инициатив ЮГУ (сессия ВШЭ)</title>
+  <link rel="stylesheet" href="styles.css?v=20260804-no-abbr-expansions">
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <h1>Сравнительный анализ проектных инициатив ЮГУ (сессия ВШЭ)</h1>
+    </header>
+
+    <div class="tabs-wrap">
+      <div class="tabs overview-tabs">
+        <button class="tab-btn active" data-tab="overview">Обзор</button>
+        <button class="tab-btn" data-tab="matrix">Матрица</button>
+        <a class="tab-btn tab-link" href="projects.html">Подробно по каждому проекту</a>
+      </div>
+    </div>
+
+    <main>
+      <section id="overview" class="tab-content active">
+        <section class="block project-summary-block">
+          <h2>Краткая сводка по проектам</h2>
+          <div class="section-note">Нажмите на карточку проекта, чтобы открыть краткую аннотацию и перейти к полному описанию.</div>
+          <div id="projectSummaryGrid" class="project-summary-grid"></div>
+        </section>
+
+        <div class="stats-grid" id="stats"></div>
+
+        <section class="block" id="problems">
+          <h2>1. Выявленные проблемы</h2>
+          <div class="section-note">Один проект может относиться к нескольким проблемным тегам, но только при наличии прямого основания в названии, вызове, цели, содержании или рисках исходного проекта.</div>
+          <div id="problemCloud" class="tag-cloud"></div>
+          <div class="legend-row sphere-legend"></div>
+        </section>
+
+        <section class="block" id="solutions">
+          <h2>2. Решения</h2>
+          <div class="section-note">В облако включены только решения, которые могут быть обособлены в самостоятельные проекты. Если решения являются этапами одной модели, в портфеле используется исходный проект целиком.</div>
+          <div id="solutionCloud" class="tag-cloud"></div>
+          <div class="legend-row sphere-legend"></div>
+        </section>
+
+        <section class="block" id="resources">
+          <h2>3. Необходимые ресурсы</h2>
+          <div class="section-note">Нажмите на тег, чтобы увидеть конкретные ресурсы и условия по проектам.</div>
+          <div id="resourceCloud" class="tag-cloud"></div>
+          <div class="legend-row sphere-legend"></div>
+        </section>
+
+        <section class="block" id="results">
+          <h2>4. Количественные результаты</h2>
+          <div class="section-note">Результаты разделены по типу количественной связи: прямое или условное закрытие другого показателя, дополнение без арифметического закрытия и самостоятельный результат.</div>
+          <div id="resultRelationLegend" class="result-relation-legend"></div>
+          <div id="resultCloud" class="result-analysis"></div>
+          <div id="excludedResults" class="excluded-results"></div>
+        </section>
+
+        <section class="block" id="clusters">
+          <h2>Проектные портфели</h2>
+          <div class="section-note">Портфель объединяет самостоятельные подпроекты и проекты, используемые целиком, если они работают на общую проблему и цель.</div><div class="grid-2" id="clusterGrid"></div>
+        </section>
+      </section>
+
+      <section id="matrix" class="tab-content">
+        <section class="block">
+          <h2>Матрица пересечений</h2>
+          <div class="section-note">Выберите тип данных, чтобы увидеть, в каких проектах встречается каждый тег.</div>
+          <div class="legend-row matrix-legend" id="matrixLegend"></div>
+          <div class="search-bar">
+            <select id="matrixType" class="filter-select">
+              <option value="problemTags">Выявленные проблемы</option>
+              <option value="solutionTags">Решения</option>
+              <option value="resourceTags">Необходимые ресурсы</option>
+              <option value="resultTags">Количественные результаты</option>
+            </select>
+          </div>
+          <div class="matrix-wrap"><table class="matrix" id="matrixTable"></table></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="modal">
+    <div class="modal-content">
+      <div class="modal-head">
+        <h2 id="modalTitle"></h2>
+        <button class="modal-close" id="modalClose" aria-label="Закрыть">×</button>
+      </div>
+      <div class="modal-summary" id="modalSummary"></div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <button class="back-top" id="backTop" aria-label="Наверх">↑</button>
+
+  <script src="data.js"></script>
+  <script>
+    const D = window.YUGU_DATA;
+    const P = D.projects;
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const pById = id => P.find(p => p.id === id);
+    function expandTerms(value) {
+      return String(value ?? '');
+    }
+
+    const fmt = value => esc(expandTerms(value));
+
+    function pluralRu(value, one, few, many) {
+      const number = Math.abs(Number(value));
+      const mod100 = number % 100;
+      const mod10 = number % 10;
+      if (mod100 >= 11 && mod100 <= 19) return many;
+      if (mod10 === 1) return one;
+      if (mod10 >= 2 && mod10 <= 4) return few;
+      return many;
+    }
+
+    function countPhrase(value, one, few, many) {
+      return `${value} ${pluralRu(value, one, few, many)}`;
+    }
+
+
+    function directionLegend() {
+      return Object.entries(D.directions).map(([key, label]) =>
+        `<span><i class="legend-dot sphere-${key}"></i>${fmt(label)}</span>`
+      ).join('');
+    }
+    document.querySelectorAll('.sphere-legend').forEach(el => el.innerHTML = directionLegend());
+
+    function sphereFor(field, tag) { return D.tagSpheres?.[field]?.[tag] || 'process'; }
+    function sphereClass(field, tag) { return `sphere-${sphereFor(field, tag)}`; }
+
+    function group(field) {
+      const grouped = {};
+      P.forEach(p => Object.entries(p[field] || {}).forEach(([tag, detail]) => {
+        if (!grouped[tag]) grouped[tag] = [];
+        grouped[tag].push({p, detail});
+      }));
+      const order = {hr:1, process:2, communication:3};
+      return Object.entries(grouped).map(([tag,items]) => {
+        const count = field === 'solutionTags'
+          ? items.reduce((sum, item) => sum + (item.detail?.solutions?.length || 0), 0)
+          : items.length;
+        return {tag, items, count, projectCount: items.length};
+      }).sort((a,b) =>
+        order[sphereFor(field,a.tag)] - order[sphereFor(field,b.tag)]
+        || b.count-a.count
+        || a.tag.localeCompare(b.tag,'ru')
+      );
+    }
+
+    const GROUPS = {
+      problemTags: group('problemTags'),
+      solutionTags: group('solutionTags'),
+      resourceTags: group('resourceTags'),
+      resultTags: group('resultTags')
+    };
+
+    function renderProjectSummary() {
+      document.getElementById('projectSummaryGrid').innerHTML = P.map(p => `
+        <button class="project-summary-card" data-project-summary="${p.id}">
+          <span class="project-summary-num">${p.num}</span>
+          <span class="project-summary-title">${fmt(p.title)}</span>
+        </button>`).join('');
+    }
+
+    function renderTags(elId, field) {
+      document.getElementById(elId).innerHTML = GROUPS[field].map(x => `
+        <button class="tag-item ${sphereClass(field,x.tag)}" data-field="${field}" data-tag="${esc(x.tag)}">
+          <span class="tag-label">${fmt(x.tag)}</span><span class="count">${x.count}</span>
+        </button>`).join('');
+    }
+
+    function typeName(field) {
+      if (field === 'problemTags') return 'Укрупнённая проблема';
+      if (field === 'solutionTags') return 'Направление решений';
+      if (field === 'resourceTags') return 'Необходимый ресурс';
+      return 'Количественный результат';
+    }
+
+    function stageList(stages) {
+      if (!stages?.length) return '';
+      return `<div class="modal-stage-list"><b>Этапы реализации</b>${stages.map(s => `
+        <div class="modal-stage">
+          ${s.time ? `<span>${fmt(s.time)}</span>` : ''}
+          <strong>${fmt(s.name)}</strong>
+          ${s.text ? `<p>${fmt(s.text)}</p>` : ''}
+          ${s.actions?.length ? `<ul class="solution-actions">${s.actions.map(a=>`<li>${fmt(a)}</li>`).join('')}</ul>` : ''}
+        </div>`).join('')}</div>`;
+    }
+
+    function solutionDetails(detail) {
+      return `<div class="modal-solutions">${(detail?.solutions || []).map(s => `
+        <article class="modal-solution-card">
+          <div class="modal-solution-top"><h4>${fmt(s.name)}</h4><span>${fmt(s.time)}</span></div>
+          <div class="unit-type-badge">${fmt(s.unitType || 'Самостоятельный подпроект')}</div>
+          <div class="solution-field"><b>Почему используется как проектная единица</b><p>${fmt(s.autonomyBasis || '')}</p></div>
+          <div class="solution-field"><b>Содержание</b><p>${fmt(s.content)}</p></div>
+          ${stageList(s.stages)}
+          ${s.actions?.length ? `<div class="solution-field"><b>Основные действия</b><ul class="solution-actions">${s.actions.map(a=>`<li>${fmt(a)}</li>`).join('')}</ul></div>` : ''}
+          <div class="solution-metric"><b>Количественный результат</b><br>${fmt(s.metrics)}</div>
+        </article>`).join('')}</div>`;
+    }
+
+
+    function resultCategoryClass(category) {
+      return `relation-${category}`;
+    }
+
+    function resultRelationLegend() {
+      return Object.entries(D.resultRelationCategories || {}).map(([key, item]) =>
+        `<span><i class="relation-legend-dot ${resultCategoryClass(key)}"></i>${fmt(item.label)}</span>`
+      ).join('');
+    }
+
+    function renderResultAnalysis() {
+      const order = ['closure', 'complement', 'unique'];
+      const groups = Object.fromEntries(order.map(key => [key, []]));
+      (D.resultAnalysis || []).forEach(item => {
+        if (!groups[item.category]) groups[item.category] = [];
+        groups[item.category].push(item);
+      });
+
+      document.getElementById('resultRelationLegend').innerHTML = resultRelationLegend();
+      document.getElementById('resultCloud').innerHTML = order.map(category => {
+        const relations = groups[category] || [];
+        if (!relations.length) return '';
+        const meta = D.resultRelationCategories[category];
+        return `
+          <section class="result-category ${resultCategoryClass(category)}">
+            <div class="result-category-head">
+              <h3>${fmt(meta.label)}</h3>
+              <span>${countPhrase(relations.length, 'группа', 'группы', 'групп')}</span>
+            </div>
+            <div class="result-relation-grid">
+              ${relations.map(relation => {
+                const projectCount = new Set(relation.items.map(item => item.projectId)).size;
+                return `
+                  <button class="result-relation-card ${resultCategoryClass(category)}" data-result-relation="${relation.id}">
+                    <span class="relation-type">${fmt(relation.relationLabel)}</span>
+                    <strong>${fmt(relation.title)}</strong>
+                    <span class="relation-project-count">${countPhrase(projectCount, 'проект', 'проекта', 'проектов')}</span>
+                  </button>`;
+              }).join('')}
+            </div>
+          </section>`;
+      }).join('');
+    }
+
+    function openResultRelation(id) {
+      const relation = (D.resultAnalysis || []).find(item => item.id === id);
+      if (!relation) return;
+      const projectCount = new Set(relation.items.map(item => item.projectId)).size;
+      document.getElementById('modalTitle').textContent = expandTerms(relation.title);
+      document.getElementById('modalSummary').textContent =
+        `${relation.relationLabel}. ${countPhrase(projectCount, 'исходный проект', 'исходных проекта', 'исходных проектов')}.`;
+      document.getElementById('modalBody').innerHTML = `
+        <article class="result-relation-modal ${resultCategoryClass(relation.category)}">
+          <div class="result-relation-summary">
+            <b>Логика связи</b>
+            <p>${fmt(relation.summary)}</p>
+          </div>
+          <div class="result-item-list">
+            ${relation.items.map(item => {
+              const p = pById(item.projectId);
+              return `
+                <article class="result-item-card">
+                  <div class="result-item-project">${p.num}. ${fmt(p.short)}</div>
+                  <span class="result-role">${fmt(item.role)}</span>
+                  <p class="result-value">${fmt(item.result)}</p>
+                  <p class="result-explanation">${fmt(item.explanation)}</p>
+                  <div class="modal-actions"><a class="open-project" href="projects.html#${p.id}">Открыть исходный проект -></a></div>
+                </article>`;
+            }).join('')}
+          </div>
+          <div class="result-limitation">
+            <b>Ограничение интерпретации</b>
+            <p>${fmt(relation.limitation)}</p>
+          </div>
+        </article>`;
+      showModal();
+    }
+
+    function openTag(field, tag) {
+      if (field === 'resultTags') {
+        const relation = (D.resultAnalysis || []).find(item => item.title === tag);
+        if (relation) openResultRelation(relation.id);
+        return;
+      }
+      const x = GROUPS[field].find(i => i.tag === tag);
+      if (!x) return;
+      document.getElementById('modalTitle').textContent = `${typeName(field)}: ${expandTerms(tag)}`;
+      let modalSummary = '';
+      if (field === 'problemTags') {
+        modalSummary = `Проблема выявлена в ${countPhrase(x.count, 'исходном проекте', 'исходных проектах', 'исходных проектах')}.`;
+      } else if (field === 'solutionTags') {
+        modalSummary = `Тег объединяет ${countPhrase(x.count, 'проектную единицу', 'проектные единицы', 'проектных единиц')} из ${countPhrase(x.projectCount, 'исходного проекта', 'исходных проектов', 'исходных проектов')}.`;
+      } else if (field === 'resourceTags') {
+        modalSummary = `Ресурс требуется для ${countPhrase(x.count, 'исходного проекта', 'исходных проектов', 'исходных проектов')}.`;
+      }
+      document.getElementById('modalSummary').textContent = modalSummary;
+      document.getElementById('modalBody').innerHTML = x.items.map(({p,detail}) => `
+        <article class="modal-project">
+          <h3>${p.num}. ${fmt(p.title)}</h3>
+          ${field === 'solutionTags' ? solutionDetails(detail) : `<p>${fmt(detail)}</p>`}
+          <div class="modal-actions"><a class="open-project" href="projects.html#${p.id}">Открыть полное описание проекта -></a></div>
+        </article>`).join('');
+      showModal();
+    }
+
+    function openProjectSummary(id) {
+      const p = pById(id); if (!p) return;
+      document.getElementById('modalTitle').textContent = `${p.num}. ${expandTerms(p.title)}`;
+      document.getElementById('modalSummary').textContent = expandTerms(`${p.period} · ${p.solutionStructure}`);
+      document.getElementById('modalBody').innerHTML = `
+        <article class="project-summary-modal">
+          <div class="summary-title"><b>Название проекта</b><p>${fmt(p.title)}</p></div>
+          <div class="summary-team"><b>Команда проекта</b><p>${fmt(p.authors)}</p></div>
+          <div class="summary-problem"><b>Исходная проблема / вызов</b><p>${fmt(p.problemSummary)}</p></div>
+          <div class="summary-solutions">
+            <b>Самостоятельные проектные единицы</b>
+            <ol>${(p.solutions||[]).map(s=>`<li><strong>${fmt(s.name)}</strong><span class="summary-stage-note">${fmt(s.unitType || '')}</span><p class="summary-solution-text">${fmt(s.content)}</p>${s.stages?.length ? `<span class="summary-stage-note">Эта проектная единица реализуется в ${countPhrase(s.stages.length, 'этап', 'этапа', 'этапов')}.</span>` : ''}</li>`).join('')}</ol>
+          </div>
+          <div class="summary-results"><b>Количественные результаты</b><ul>${(p.resultQuant||[]).map(x=>`<li>${fmt(x)}</li>`).join('')}</ul></div>
+          <div class="modal-actions"><a class="open-project" href="projects.html#${p.id}">Перейти к полному описанию -></a></div>
+        </article>`;
+      showModal();
+    }
+
+    function showModal(){ document.getElementById('modal').classList.add('active'); document.body.style.overflow='hidden'; }
+    function closeModal(){ document.getElementById('modal').classList.remove('active'); document.body.style.overflow=''; }
+
+    function portfolioUnit(ref) {
+      const p = pById(ref.projectId);
+      const s = p?.solutions?.[ref.solutionIndex];
+      return p && s ? {p, s} : null;
+    }
+
+    function renderClusters() {
+      document.getElementById('clusterGrid').innerHTML = D.clusters.map((c,index) => `
+        <article class="cluster-card portfolio-card">
+          <div class="portfolio-card-head">
+            <h4>${fmt(c.name)}</h4>
+            <span class="portfolio-count">${countPhrase(c.units.length, 'проектная единица', 'проектные единицы', 'проектных единиц')}</span>
+          </div>
+          <p>${fmt(c.text)}</p>
+          <div class="portfolio-tags">
+            ${(c.problemTags||[]).map(tag=>`<span class="portfolio-problem">${fmt(tag)}</span>`).join('')}
+          </div>
+          <div class="cluster-projects">${c.projects.map(id=>{const p=pById(id);return `<a class="mini-pill" href="projects.html#${id}">${p.num}. ${fmt(p.short)}</a>`}).join('')}</div>
+          <button class="portfolio-open" data-portfolio="${index}">Открыть состав портфеля</button>
+        </article>`).join('');
+    }
+
+    function openPortfolio(index) {
+      const c = D.clusters[index];
+      if (!c) return;
+      const units = (c.units || []).map(portfolioUnit).filter(Boolean);
+      const projectCount = new Set(units.map(x => x.p.id)).size;
+      document.getElementById('modalTitle').textContent = expandTerms(c.name);
+      document.getElementById('modalSummary').textContent =
+        `${countPhrase(units.length, 'проектная единица', 'проектные единицы', 'проектных единиц')} из ${countPhrase(projectCount, 'исходного проекта', 'исходных проектов', 'исходных проектов')}.`;
+      document.getElementById('modalBody').innerHTML = `
+        <article class="portfolio-modal">
+          <p>${fmt(c.text)}</p>
+          <div class="portfolio-modal-tags">
+            <div><b>Проблемы портфеля</b>${(c.problemTags||[]).map(tag=>`<span class="tiny-tag sphere-${sphereFor('problemTags',tag)}">${fmt(tag)}</span>`).join('')}</div>
+            <div><b>Направления решений</b>${(c.solutionTags||[]).map(tag=>`<span class="tiny-tag sphere-${sphereFor('solutionTags',tag)}">${fmt(tag)}</span>`).join('')}</div>
+          </div>
+          <div class="portfolio-unit-list">${units.map(({p,s})=>`
+            <article class="portfolio-unit-card">
+              <div class="portfolio-unit-source">${p.num}. ${fmt(p.short)}</div>
+              <h4>${fmt(s.name)}</h4>
+              <div class="unit-type-badge">${fmt(s.unitType)}</div>
+              <p>${fmt(s.content)}</p>
+              ${s.stages?.length ? `<div class="portfolio-stage-note">${countPhrase(s.stages.length, 'этап реализации', 'этапа реализации', 'этапов реализации')}</div>` : ''}
+              <div class="modal-actions"><a class="open-project" href="projects.html#${p.id}">Открыть исходный проект -></a></div>
+            </article>`).join('')}</div>
+        </article>`;
+      showModal();
+    }
+
+    function renderStats() {
+      const solutionCount = P.reduce((s,p)=>s+(p.solutions?.length||0),0);
+      const stats = [
+        [String(P.length), pluralRu(P.length, 'исходный проект', 'исходных проекта', 'исходных проектов')],
+        [solutionCount, pluralRu(solutionCount, 'проектная единица', 'проектные единицы', 'проектных единиц')],
+        [GROUPS.problemTags.length, pluralRu(GROUPS.problemTags.length, 'укрупнённая проблема', 'укрупнённые проблемы', 'укрупнённых проблем')],
+        [GROUPS.solutionTags.length, pluralRu(GROUPS.solutionTags.length, 'направление решений', 'направления решений', 'направлений решений')],
+        [String(D.clusters.length), pluralRu(D.clusters.length, 'портфель', 'портфеля', 'портфелей')]
+      ];
+      document.getElementById('stats').innerHTML = stats.map(([n,l])=>`<div class="stat-card"><div class="number">${n}</div><div class="label">${l}</div></div>`).join('');
+    }
+
+    function renderMatrix(field='problemTags') {
+      const tags=GROUPS[field];
+      document.getElementById('matrixLegend').innerHTML =
+        field === 'resultTags' ? resultRelationLegend() : directionLegend();
+      document.getElementById('matrixTable').innerHTML = `<thead><tr><th>Тег</th>${P.map(p=>`<th title="${esc(p.title)}">${p.num}</th>`).join('')}<th>Всего</th></tr></thead><tbody>${tags.map(t=>{
+        const sphere=sphereClass(field,t.tag);
+        return `<tr>
+          <td><button class="tag-item ${sphere}" style="padding:5px 8px" data-field="${field}" data-tag="${esc(t.tag)}"><span class="tag-label">${fmt(t.tag)}</span></button></td>
+          ${P.map(p=>{
+            const value=p[field]?.[t.tag];
+            const amount=field==='solutionTags' ? (value?.solutions?.length||0) : (value?1:0);
+            return `<td class="${amount ? `yes ${sphere}` : ''}">${amount ? (field==='solutionTags'?amount:'●') : ''}</td>`;
+          }).join('')}
+          <td><b>${t.count}</b></td>
+        </tr>`;
+      }).join('')}</tbody>`;
+    }
+
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => btn.addEventListener('click',()=>{
+      document.querySelectorAll('.tab-btn[data-tab]').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+      btn.classList.add('active'); document.getElementById(btn.dataset.tab).classList.add('active'); window.scrollTo({top:0,behavior:'smooth'});
+    }));
+    document.addEventListener('click',e=>{
+      const tag=e.target.closest('.tag-item[data-field]'); if(tag) openTag(tag.dataset.field,tag.dataset.tag);
+      const resultRelation=e.target.closest('[data-result-relation]'); if(resultRelation) openResultRelation(resultRelation.dataset.resultRelation);
+      const project=e.target.closest('[data-project-summary]'); if(project) openProjectSummary(project.dataset.projectSummary);
+      const portfolio=e.target.closest('[data-portfolio]'); if(portfolio) openPortfolio(Number(portfolio.dataset.portfolio));
+    });
+    document.getElementById('modalClose').onclick=closeModal;
+    document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal') closeModal()});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal()});
+    document.getElementById('matrixType').addEventListener('change',e=>renderMatrix(e.target.value));
+    const bt=document.getElementById('backTop'); window.addEventListener('scroll',()=>bt.style.display=window.scrollY>600?'block':'none'); bt.onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
+
+    renderProjectSummary(); renderStats(); renderTags('problemCloud','problemTags'); renderTags('solutionCloud','solutionTags'); renderTags('resourceCloud','resourceTags'); renderResultAnalysis(); renderClusters(); renderMatrix();
+  </script>
+</body>
+</html>
